@@ -315,9 +315,9 @@ A
 length(B)
 dim(B)
 dimnames(B) <- list( # given as a list
-  c("one", "two"), 
-  c("a", "b", "c"), 
-  c("A", "B")
+    c("one", "two"), 
+    c("a", "b", "c"), 
+    c("A", "B")
 )
 B
 ```
@@ -357,16 +357,16 @@ Create by passing named vectors to `data.frame()`.
 
 ```{r}
 df <- data.frame(
-  x = 1:3, 
-  y = c("a", "b", "c")
+    x = 1:3, 
+    y = c("a", "b", "c")
 )
 str(df)
 
 # preserve the strings as strings
 df <- data.frame(
-  x = 1:3, 
-  y = c("a", "b", "c"), 
-  stringsAsFactors = FALSE
+    x = 1:3, 
+    y = c("a", "b", "c"), 
+    stringsAsFactors = FALSE
 )
 str(df)
 ```
@@ -608,6 +608,506 @@ df <- tibble::tibble(x = 1:3,
 
 df["x"]
 df[, "x"]
+```
+
+### Preserving dimensionality
+
+By default when using a single name, number, or value of TRUE, the result will be simplified. Can prevent this with `drop = FALSE`.
+
+```{r}
+A <- matrix(1:4, nrow = 2)
+str(A[1, ])
+
+str(A[1, , drop = FALSE])
+
+df <- data.frame(a = 1:2, b = 1:2)
+str(df[, "a"])
+
+str(df[, "a", drop = FALSE])
+```
+
+
+When programming should specify `drop = FALSE` to prevent errors caused by simplification when subsetting with a single index. Another reason to prefer tibbles, where that is the default.
+
+### Exercises
+
+1. Fix each of the following common data frame subsetting errors:
+
+```{r}
+# mtcars[mtcars$cyl = 4, ]
+# must use == for comparison
+mtcars[mtcars$cyl == 4, ]
+
+# mtcars[-1:4, ]
+# attempting to create a sequence from -1 to 4, mixing positive and negative 
+# numbers, which won't work.
+mtcars[-(1:4), ]
+
+# mtcars[mtcars$cyl <= 5]
+# need the trailing comma to specify that all columns are to be returned
+mtcars[mtcars$cyl <= 5, ]
+
+# mtcars[mtcars$cyl == 4 | 6, ]
+# the second condition must be specified in full, or the equality can be 
+# replaced with %in%
+mtcars[mtcars$cyl == 4 | mtcars$cyl == 6, ]
+mtcars[mtcars$cyl %in% c(4, 6), ]
+```
+
+2. Why does the following code yield five missing values? (Hint: why is it different from `x[NA_real_]`?)
+
+```{r}
+x <- 1:5
+x[NA]
+x[NA_real_]
+```
+
+This is because the vector is type integer, so in the call `x[NA]` the `NA` is coerced to logical, and then it returns `NA` at each index because its value is neither `TRUE` nor `FALSE`. Whereas subsetting with a real number does not make sense, so the result is just `NA`. Compare this to the different types of `NA`.
+
+```{r, error=TRUE}
+x[NA_character_]
+x[NA_complex_]
+x[NA_integer_]
+```
+
+3. What does `upper.tri()` return? How does subsetting a matrix with it work? Do we need any additional subsetting rules to describe its behaviour?
+
+```{r}
+x <- outer(1:5, 1:5, FUN = "*")
+x[upper.tri(x)]
+```
+
+`upper.tri(x)` returns a logical matrix with the same dimensions as `x` where only the upper-trinagular entries are `TRUE` (not including the diagonal). Because it's subsetting with `[]` the result is simplified to a vector.
+
+4. Why does `mtcars[1:20]` return an error? How does it differ from the similar `mtcars[1:20, ]`?
+
+```{r, error=TRUE}
+mtcars[1:20]
+```
+
+We can see that `mtcars` has `r ncol(mtcars)` variables, so we are trying to access columns that don't exist. Adding a comma inside the `[]` changes the request to 'return the first 20 rows of `mtcars`'.
+
+```{r}
+mtcars[1:20, ]
+```
+
+Implement your own function that extracts the diagonal entries from a matrix (it should behave like `diag(x)` where `x` is a matrix).
+
+```{r}
+get_diag <- function(X) {
+    if (!nrow(X) == ncol(X)) {
+        stop("get_diag is for square matrices only")
+    }
+    indices <- seq_len(nrow(X))
+    return(X[matrix(c(indices, 
+                      indices), 
+                    ncol = 2, 
+                    byrow = FALSE)])
+}
+
+get_diag(A)
+get_diag(x)
+```
+
+6. What does `df[is.na(df)] <- 0` do? How does it work?
+
+Can start by looking at the inside statement on a data frame with some missing values.
+
+```{r}
+d <- data.frame(x = 1:5, 
+                y = c(6, NA, 8, 9, NA), 
+                z = c("a", "b", NA, NA, NA), 
+                stringsAsFactors = FALSE)
+is.na(d)
+```
+
+So this returns a logical matrix of the same dimensions as the data frame, which is TRUE for entries that are `NA`. Subsetting using that returns a vector.
+
+```{r}
+d[is.na(d)]
+```
+
+But then using that on the left side of the assignment replaces the relevant values with `0`.
+
+```{r}
+d[is.na(d)] <- 0
+
+d
+```
+
+## Selecting a single element
+
+This is where the `[[` and `$` operators become useful.
+
+### `[[`
+
+Can use the train metaphor:
+
+> If `x` is a list then x[[5]] is the object in car number 5, whereas x[5] is a 
+> smaller train consisting of just car number 5.
+
+```{r}
+x <- list(1:3, "a", 4:6)
+```
+
+When extracting a single element we have the option of either getting that car or making a smaller train with just that car, which is double brackets and single brackets respectively.
+
+```{r}
+x[[1]]
+x[1]
+```
+
+But if we want either multiple or zero elements we need to make a smaller train.
+
+```{r}
+x[1:2]
+x[-2]
+x[c(1, 1)]
+x[0]
+```
+
+Trying to use multiple values with `[[` will either subset recursively at deeper levels of the list (if possible), or throw an error.
+
+```{r, error=TRUE}
+x[[c(1, 2)]] # returns second element of the first element
+
+x[[c(1, 7)]] # throws an error because first element has no seventh element
+```
+
+`[[` can also be used with vectors, as shown implicitly in that last code block. And doing so makes it explicit that we are accessing a single element.
+
+### `$`
+
+This is mostly just a shorthand for accessing elements by name: `x$y` is about the same as `x[["y]]`. It won't work when the name is stored in a variable.
+
+```{r, error=TRUE}
+variable <- "cyl"
+
+# this won't work, it's basically mtcars[["variable"]]
+mtcars$variable
+
+# but this does work
+mtcars[[variable]]
+```
+
+`$` will do partial matching, which can be dangerous!
+
+```{r}
+# set this option to FALSE as I set it to TRUE in my .Rprofile after 
+# reading this section!
+options(warnPartialMatchDollar = FALSE)
+
+x <- list(abc = 1)
+x$a
+x[["a"]]
+```
+
+Can prevent this through options.
+
+```{r}
+options(warnPartialMatchDollar = TRUE)
+x$a
+```
+
+### Missing or out-of-bounds indices
+
+The results for using these invalid indices can vary a lot, as per the table below.
+
+| `row[[col]]` | Zero-length | OOB (int)  | OOB (chr) | Missing  |
+|--------------|-------------|------------|-----------|----------|
+| Atomic       | Error       | Error      | Error     | Error    |
+| List         | Error       | Error      | `NULL`    | `NULL`   |
+| `NULL`       | `NULL`      | `NULL`     | `NULL`    | `NULL`   |
+
+All of this gives rise to the usefulness of `purrr::pluck()` (which will always return `NULL` when the element is missing) and `purrr::chuck()` (which throws an error).
+
+```{r}
+x <- list(
+    a = list(1, 2, 3), 
+    b = list(3, 4, 5)
+)
+
+purrr::pluck(x, "a", 1)
+
+purrr::pluck(x, "c", 1)
+
+purrr::pluck(x, "c", 1, .default = NA)
+```
+
+### `@` and `slot()`
+
+Need these for S4 objects (such as certain sparse matrices). More details later.
+
+### Exercises
+
+1. Brainstorm as many ways as possible to extract the third value from the cyl variable in the mtcars dataset.
+
+```{r}
+mtcars[3, 2]
+mtcars[3, "cyl"]
+mtcars[[2]][[3]]
+mtcars[[2]][3]
+mtcars[["cyl"]][[3]]
+mtcars[["cyl"]][3]
+mtcars[2][3, ]
+```
+
+2. Given a linear model, e.g., `mod <- lm(mpg ~ wt, data = mtcars)`, extract the residual degrees of freedom. Then extract the R squared from the model summary `(summary(mod))`.
+
+```{r}
+mod <- lm(mpg ~ wt, data = mtcars)
+mod[["df.residual"]]
+summary(mod)[["r.squared"]]
+```
+
+## Subsetting and assignment
+
+As seen earlier with the `d[is.na(d)] <- 0` example subsetting can be used on the left of assignment to change those elements, which is called **subassignment**.
+
+```{r}
+x <- 1:5
+
+x[c(1, 2)] <- c(101, 102)
+x
+```
+
+Using `NULL` on the right of the `<-` with a list will remove that element. To instead replace that element with `NULL` use `list(NULL)`.
+
+```{r}
+x <- list(a = 1, b = 2)
+x[["b"]] <- NULL
+str(x)
+
+y <- list(a = 1, b = 2)
+y[["b"]] <- list(NULL)
+str(y)
+```
+
+In this context subsetting with nothing can be useful, as below.
+
+```{r}
+d <- mtcars
+
+d[] <- lapply(d, as.integer)
+is.data.frame(d)
+
+d <- lapply(d, as.integer)
+is.data.frame(d)
+```
+
+In the first one it is the elements of `d` that get changed: in the second the output from `lapply(d, as.integer)` (which is a list, not a data frame) is assigned to the name `d`.
+
+## Applications
+
+Some examples of how to use the subsetting techniques above.
+
+### Lookup tables
+
+To convert abbreviations:
+
+```{r}
+x <- c("m", "f", "u", "f", "f", "m", "m")
+lookup <- c(m = "Male", f = "Female", u = NA)
+lookup[x]
+
+# can also drop the names if preferred
+unname(lookup[x])
+```
+
+### Matching and merging by hand
+
+```{r}
+# vector of grades
+grades <- c(1L, 2L, 2L, 3L, 1L)
+
+# lookup table with details for each grade
+info <- data.frame(
+    grade = 3:1, 
+    desc = c("Excellent", 
+             "Good", 
+             "Poor"), 
+    fail = c(FALSE, FALSE, TRUE)
+)
+
+# subset the lookup table repeatedly based on which grade matches
+info[match(grades, info$grade), ]
+```
+
+If the join conditions were more complex then switching to `dplyr::left_join()` or `merge()` would be better.
+
+### Random samples and bootstraps
+
+```{r}
+df <- data.frame(
+    x = c(1, 2, 3, 1, 2), 
+    y = 5:1, 
+    z = letters[1:5]
+)
+
+# randomly reorder
+df[sample(nrow(df)), ]
+
+# sample three rows
+df[sample(nrow(df), size = 3), ]
+
+# take a bootstrap sample
+df[sample(nrow(df), replace = TRUE), ]
+```
+
+### Ordering
+
+```{r}
+x <- c("b", "c", "a")
+order(x)
+
+x[order(x)]
+```
+
+Can use this in 2 or more dimensions also.
+
+```{r}
+df2 <- df[sample(nrow(df)), 3:1]
+df2
+
+df2[order(df2$x), ]
+
+df2[, order(names(df2))]
+```
+
+Can also use `sort()` to directly sort a vector, and `dplyr::arrange()` to sort a data frame.
+
+
+### Expanding aggregated counts
+
+Take advantage of `rep()` being vectorised: `rep(x, y)` repeats `x[i]` `y[i]` times.
+
+```{r}
+df <- data.frame(x = c(2, 4, 1), 
+                 y = c(9, 11, 6), 
+                 n = c(3, 5, 1))
+
+rep(seq_len(nrow(df)), df$n)
+
+df[rep(seq_len(nrow(df)), df$n), ]
+```
+
+### Removing columns from data frames
+
+Can set individual columns to `NULL`. 
+
+```{r}
+df <- data.frame(x = 1:3, 
+                 y = 3:1, 
+                 z = letters[1:3])
+
+df$z <- NULL
+
+df
+```
+
+Or specify just the columns needed. 
+
+```{r}
+df <- data.frame(x = 1:3, 
+                 y = 3:1, 
+                 z = letters[1:3])
+
+df[c("x", "y")]
+```
+
+Or specify columns to drop using `setdiff()`.
+
+```{r}
+df[setdiff(names(df), "z")]
+```
+
+### Selecting rows based on a condition
+
+```{r}
+mtcars[mtcars$gear == 5, ]
+
+mtcars[mtcars$gear == 5 & mtcars$cyl == 4, ]
+```
+
+Must use `&` and `|` instead of `&&` and `||`.
+
+### Boolean algebra vs. sets
+
+There's a natural equivalence between set operations (integer subsetting) and Boolean algebra (logical subsetting). In general set operations will be better when:
+
+- You want to find the first or last `TRUE`.
+- There are very few `TRUE`s.
+
+`which()` allows for switching from Boolean to integer. There's no built-in reverse but we can create one.
+
+```{r}
+x <- sample(10) < 4
+which(x)
+
+unwhich <- function(x, n) {
+    out <- rep_len(FALSE, n)
+    out[x] <- TRUE
+    out
+}
+
+unwhich(which(x), 10)
+```
+
+Now create two logical vectors and their integer equivalents, examine the relationship between set and Boolean operations.
+
+```{r}
+(x1 <- 1:10 %% 2 == 0)
+
+(x2 <- which(x1))
+
+(y1 <- 1:10 %% 5 == 0)
+
+(y2 <- which(y1))
+
+# x & y <-> x intersect y
+x1 & y1
+intersect(x2, y2)
+
+# x | y <-> x union y
+x1 | y1
+union(x2, y2)
+
+# x & !y <-> setdiff(x, y)
+x1 & !y1
+setdiff(x2, y2)
+
+# xor(x, y) <-> setdiff(union(x, y), intersect(x, y))
+xor(x1, y1)
+setdiff(union(x2, y2), intersect(x2, y2))
+```
+
+### Exercises
+
+1. How would you randomly permute the columns of a data frame? (This is an important technique in random forests.) Can you simultaneously permute the rows and columns in one step?
+
+```{r}
+set.seed(1)
+mtcars[sample(nrow(mtcars)), sample(ncol(mtcars))]
+```
+
+2. How would you select a random sample of m rows from a data frame? What if the sample had to be contiguous (i.e., with an initial row, a final row, and every row in between)?
+
+```{r}
+# first take just m rows from anywhere
+sample_size <- 7
+# set.seed(1)
+mtcars[sample(nrow(mtcars), sample_size), ]
+
+# now ensure that the sample is contiguous
+mtcars[seq(from = sample(nrow(mtcars) - sample_size + 1, size = 1), 
+           by = 1, 
+           length.out = sample_size), ]
+```
+
+3. How could you put the columns in a data frame in alphabetical order?
+
+```{r}
+mtcars[, order(names(mtcars))]
 ```
 
 
