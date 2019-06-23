@@ -1285,6 +1285,167 @@ legs("dog")
 
 ### Exercises
 
+1. What type of vector does each of the following calls to ifelse() return?
+
+```{r}
+# the type is taken from values in `yes`, then from `no`. Since each of these 
+# will have only a single result, type of the output will depend on whether the 
+# test returns TRUE or FALSE
+
+# first will return double as that's the type of the yes value
+typeof(ifelse(TRUE, 1, "no"))
+
+# now will return character
+ifelse(FALSE, 1, "no")
+
+# then returns NA as the test argument fails to return a logical
+ifelse(NA, 1, "no")
+```
+
+2. Why does the following code work?
+
+```{r}
+x <- 1:10
+if (length(x)) "not empty" else "empty"
+
+x <- numeric()
+if (length(x)) "not empty" else "empty"
+```
+
+The `length()` functions returns an integer, which can be used as the predicate: a value of `0L` is coerced to `FALSE`, any other integer is coerced to `TRUE`.
+
+```{r}
+as.logical(-5:5)
+```
+
+## Loops
+
+For loops iterate over a vector:
+
+    for (item in vector) perform_action
+
+Which can be written in the more common form with `{}`:
+
+    for (item in vector) {
+       perform_compound_action
+    }
+    
+```{r}
+for (i in 1:5) {
+  print(i)
+}
+```
+
+The variable (in this case, `i`), is created in the global environment.
+
+```{r}
+i <- 100
+for (i in 1:3) {}
+i
+```
+
+Can stop a loop early in a couple of ways.
+
+```{r}
+# `next` will skip to the next step in the loop
+# `break` stops the loop
+
+for (i in 1:10) {
+  if (i < 3) {
+    next
+  }
+  
+  print(i)
+  
+  if (i >= 5) {
+    break
+  }
+}
+```
+
+### Common pitfalls
+
+1. Must remember to preallocate output container if the loop will create something, otherwise it will be very slow.
+
+```{r}
+means <- c(1, 50, 20)
+out <- vector("list", length(means))
+for (i in seq_along(means)) {
+  out[[i]] <- rnorm(10, means[[i]])
+}
+```
+
+2. Beware of the `:` for creating integer sequences. Use `seq_along()` or `seq_len()` instead.
+
+```{r}
+empty_vec <- integer()
+1:length(empty_vec)
+seq_along(empty_vec)
+```
+
+3. Sometimes attributes are lost when iterating directly, in which case you can use the index and subset instead.
+
+```{r}
+xs <- as.Date(c("2020-01-01", "2010-01-01"))
+for (x in xs) {
+  print(x)
+}
+for (x in seq_along(xs)) {
+  print(xs[[x]])
+}
+```
+
+
+### Related tools
+
+`for` loops work well if the elements are known in advance. Otherwise there are:
+
+- `while (condition) action` loops, which run while a given condition is `TRUE`.
+- `repeat (action)`: will just run until it hits `break`.
+
+### Exercises
+
+1. Why does this code succeed without errors or warnings?
+
+```{r}
+# x and out are just empty vectors, double and list types respectively
+x <- numeric()
+out <- vector("list", length(x))
+
+# the loop iterates over i = 1, then i = 0
+# x[1] returns NA because there is no 1st element of x, which when squared is 
+# still NA. That is assigned to the 1st element of out.
+# x[0] returns an empty numeric, which squared is unchanged. It is assigned to 
+# the zeroth element of out, i.e. not retained.
+for (i in 1:length(x)) {
+  out[i] <- x[i] ^ 2
+}
+out
+```
+
+2. When the following code is evaluated, what can you say about the vector being iterated?
+
+```{r}
+xs <- c(1, 2, 3)
+for (x in xs) {
+  xs <- c(xs, x * 2)
+}
+xs
+```
+
+We can see that the vector `xs` that is being iterated over is not the same as that being added to inside the loop, as the loop stops after the 'original' three values of the vector.
+
+3. What does the following code tell you about when the index is updated?
+
+```{r}
+for (i in 1:3) {
+  i <- i * 2
+  print(i) 
+}
+```
+
+The index is updated every time the loop goes round.
+
 
 
 [1]: http://adv-r.had.co.nz/
