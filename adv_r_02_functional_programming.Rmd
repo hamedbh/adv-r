@@ -136,8 +136,8 @@ hist(map_dbl(trials, "p.value"))
 
 ```{r, error=TRUE}
 x <- list(
-  list(1, c(3, 9)),
-  list(c(3, 6), 7, c(4, 7, 6))
+    list(1, c(3, 9)),
+    list(c(3, 6), 7, c(4, 7, 6))
 )
 
 triple <- function(x) x * 3
@@ -163,10 +163,10 @@ map(x, function(x) {
 
 ```{r}
 formulas <- list(
-  mpg ~ disp,
-  mpg ~ I(1 / disp),
-  mpg ~ disp + wt,
-  mpg ~ I(1 / disp) + wt
+    mpg ~ disp,
+    mpg ~ I(1 / disp),
+    mpg ~ disp + wt,
+    mpg ~ I(1 / disp) + wt
 )
 
 map(formulas, ~ lm(formula = .x, data = mtcars))
@@ -176,7 +176,7 @@ map(formulas, ~ lm(formula = .x, data = mtcars))
 
 ```{r}
 bootstrap <- function(df) {
-  df[sample(nrow(df), replace = TRUE), , drop = FALSE]
+    df[sample(nrow(df), replace = TRUE), , drop = FALSE]
 }
 
 bootstraps <- map(1:10, ~ bootstrap(mtcars))
@@ -282,10 +282,10 @@ Naming the elements inside `list()` is good practice to make things clearer. The
 
 ```{r}
 params <- tibble::tribble(
-  ~ n, ~ min, ~ max,
-   1L,     0,     1,
-   2L,    10,   100,
-   3L,   100,  1000
+    ~ n, ~ min, ~ max,
+    1L,     0,     1,
+    2L,    10,   100,
+    3L,   100,  1000
 )
 
 pmap(params, runif)
@@ -327,8 +327,8 @@ iwalk(cyls, ~ write.csv(.x,
 
 ```{r}
 trans <- list(
-  disp = function(x) x * 0.0163871,
-  am = function(x) factor(x, labels = c("auto", "manual"))
+    disp = function(x) x * 0.0163871,
+    am = function(x) factor(x, labels = c("auto", "manual"))
 )
 
 nm <- names(trans)
@@ -428,11 +428,11 @@ anyNA(c(1:5, NA))
 
 ```{r, error=TRUE}
 simple_reduce <- function(x, f) {
-  out <- x[[1]]
-  for (i in seq(2, length(x))) {
-    out <- f(out, x[[i]])
-  }
-  out
+    out <- x[[1]]
+    for (i in seq(2, length(x))) {
+        out <- f(out, x[[i]])
+    }
+    out
 }
 simple_reduce(character(0), paste)
 simple_reduce("a", paste)
@@ -509,5 +509,115 @@ modify(ggplot2::diamonds, scale01)
 
 # apply to numeric cols only
 modify_if(ggplot2::diamonds, is.numeric, scale01)
+```
+
+## Base functionals
+
+### Exercises
+
+3
+
+```{r}
+fixed_point <- function(f, 
+                        init, 
+                        n_max = 10000, 
+                        tol = 0.00001) {
+    current_guess <- init
+    for (i in seq_len(n_max)) {
+        print(paste0("Guess ", i, " is ", current_guess))
+        if (abs((f(current_guess) - current_guess)) < tol) {
+            return(current_guess)
+        } else {
+            current_guess <- f(current_guess)
+        }
+    }
+    
+}
+```
+
+
+```{r}
+# find golden ratio
+fixed_point(function (x) 1 + 1/x, 1)
+```
+
+```{r}
+# find fixed point of x^x
+fixed_point(function(x) log(1000)/log(x), 5)
+```
+
+Now build a version of `fixed_point` with average damping.
+
+```{r}
+fixed_point_damped <- function(f, 
+                        init, 
+                        n_max = 10000, 
+                        tol = 0.00001) {
+    current_guess <- init
+    for (i in seq_len(n_max)) {
+        print(paste0("Guess ", i, " is ", current_guess))
+        if (abs((f(current_guess) - current_guess)) < tol) {
+            return(current_guess)
+        } else {
+            current_guess <- mean(f(current_guess), current_guess)
+        }
+    }
+}
+```
+
+How quickly can this find fixed-point of $x^x$?
+
+```{r}
+fixed_point_damped(function(x) log(1000)/log(x), 5)
+```
+
+Version of truncated continued fraction function using recursion.
+
+```{r}
+cont_frac <- function(n, d, k) {
+    frac <- function(i) {
+        if (i < k) {
+            n[i] / (d[i] + frac(i + 1))
+        } else {
+            n[i]/d[i]
+        }
+    }
+    frac(1)
+}
+```
+
+Now calculate golden ratio to 4 decimal places and check which value of $k$ first gets it right.
+
+```{r}
+tests <- map_dbl(1:20, 
+                 ~ round(cont_frac(rep(1, .x), rep(1, .x), .x), 
+                         digits = 4))
+
+detect_index(tests, ~ .x == 0.6180)
+```
+
+Now do the same but using iteration.
+
+```{r}
+cont_frac_iter <- function(n, d, k) {
+    frac <- function(i, x) {
+        if (i == 0) {
+            return(x)
+        } else {
+            frac(i - 1, n[i]/(d[i] + x))
+        }
+    }
+    frac(k - 1, n[k]/d[k])
+}
+```
+
+Now calculate golden ratio tagain with this function
+
+```{r}
+tests_iter <- map_dbl(1:20, 
+                      ~ round(cont_frac_iter(rep(1, .x), rep(1, .x), .x), 
+                              digits = 4))
+
+detect_index(tests_iter, ~ .x == 0.6180)
 ```
 
