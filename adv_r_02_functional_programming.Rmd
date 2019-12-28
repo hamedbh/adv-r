@@ -621,3 +621,21 @@ tests_iter <- map_dbl(1:20,
 detect_index(tests_iter, ~ .x == 0.6180)
 ```
 
+## Function factories
+
+Functions that make other functions!
+
+```{r}
+power1 <- function(exponent) {
+    function(x) {
+        x^(exponent)
+    }
+}
+
+square <- power1(2)
+cube <- power1(3)
+
+square(1:5)
+cube(1:5)
+```
+
