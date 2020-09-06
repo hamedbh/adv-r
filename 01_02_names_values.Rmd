@@ -1,0 +1,413 @@
+```{r setup01, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lobstr)
+```
+
+# Names and values
+
+## Intro
+
+### Quiz {-}
+
+**1.**
+
+_Given the following data frame, how do I create a new column called “3” that contains the sum of `1` and `2`? You may only use `$`, not `[[`. What makes `1`, `2`, and `3` challenging as variable names?_
+
+```{r}
+df <- data.frame(runif(3), runif(3))
+names(df) <- c(1, 2)
+df$`3` <- df$`1` + df$`2`
+df
+```
+
+The names are bad because they require backticks. These are 'non-syntactic' names, and are a pain. 
+
+**2.** 
+
+_In the following code, how much memory does `y` occupy?_
+
+```{r}
+x <- runif(1e6)
+y <- list(x, x, x)
+```
+
+About the same as `x`. We can see this for ourselves. 
+
+```{r}
+obj_size(x)
+obj_size(x) - pryr::object_size(y)
+```
+The difference is presumably related to the extra overhead of the list structure, but is tiny compared to the size of `x` itself. 
+
+**3.** 
+
+_On which line does `a` get copied in the following example?_
+
+Only when `b` is modified, i.e. the third line. 
+
+```{r}
+a <- c(1, 5, 3, 2)
+obj_addr(a)
+b <- a
+obj_addr(a)
+obj_addr(b)
+b[[1]] <- 10
+obj_addr(b)
+```
+## Binding basics
+
+### Exercises {-}
+
+**1.** 
+
+_Explain the relationship between `a`, `b`, `c` and `d` in the following code:_
+
+```{r}
+a <- 1:10
+# b is now created as a copy of a, but they both point to the same address
+b <- a
+obj_addr(a)
+obj_addr(b)
+# now c is created as a copy of b, same address
+c <- b
+obj_addr(b)
+obj_addr(c)
+# d is just a separate vector
+d <- 1:10
+obj_addr(d)
+```
+
+So `a`, `b`, and `c` all point to the same address; `d` is separate. All have the same value though. 
+
+**2.** 
+
+_The following code accesses the mean function in multiple ways. Do they all point to the same underlying function object? Verify this with `lobstr::obj_addr()`._
+
+```{r}
+obj_addr(mean)
+obj_addr(base::mean)
+obj_addr(get("mean"))
+obj_addr(evalq(mean))
+obj_addr(match.fun("mean"))
+```
+All are the same, accessing the same underlying object. 
+
+**3.** 
+
+_By default, base R data import functions, like `read.csv()`, will automatically convert non-syntactic names to syntactic ones. Why might this be problematic? What option allows you to suppress this behaviour?_
+
+It might be problematic as it would change the names from the input file, which could cause unexpected results later on. For example: a variable in the input file has the name `93avg`. If code later expects that name but it's been changed then the pipeline might fail. 
+
+Can change this by setting `check.names = FALSE`. 
+
+**4.** 
+
+_What rules does `make.names()` use to convert non-syntactic names into syntactic ones?_
+
+From the manual page for `make.names()`: 
+
+> The character "`X`" is prepended if necessary. All invalid characters are translated to "`.`". A missing value is translated to "`NA`". Names which match R keywords have a dot appended to them. Duplicated values are altered by `make.unique`.
+
+**5.** 
+
+_I slightly simplified the rules that govern syntactic names. Why is `.123e1` not a syntactic name? Read `?make.names` for the full details._
+
+From the man page: 
+
+> A syntactically valid name … starts with a letter or the dot **not followed by a number**. Names such as ".2way" are not valid …
+
+[Emphasis mine.] So `.123e1` is not syntactic, but `.e123e1` would be. 
+
+## Copy-on-modify
+
+### Exercises {-}
+
+**1.** 
+
+_Why is `tracemem(1:10)` not useful?_
+
+Because `1:10` is a value not bound to a name. So any new variable with that value will point to a different address. 
+
+```{r}
+tracemem(1:10)
+tmp <- 1:10
+obj_addr(tmp)
+```
+
+**2.**
+
+_Explain why `tracemem()` shows two copies when you run this code. Hint: carefully look at the difference between this code and the code shown earlier in the section._
+
+```{r}
+x <- c(1L, 2L, 3L)
+tracemem(x)
+
+x[[3]] <- 4
+```
+
+Because the vector is being changed twice: once to change its type from integer to double; then to change the value of the third entry to 4. 
+
+Can see this by doing the same but with an integer 4. 
+
+```{r}
+x <- c(1L, 2L, 3L)
+tracemem(x)
+
+x[[3]] <- 4L
+```
+
+**3.** 
+Sketch out the relationship between the following objects:
+
+```{r}
+a <- 1:10
+b <- list(a, a)
+c <- list(b, a, 1:10)
+```
+
+`a` is an integer vector. 
+
+`b` is a list with each element pointing at the same object bound to `a`. 
+
+`c` is a list with its first element pointing at `b`, which is in turn pointing twice at `a`; second element pointing at `a`; third element pointing at a new vector of integers 1 to 10 with a different address. 
+
+```{r}
+ref(a, b, c)
+```
+
+**4.**
+
+What happens when you run this code?
+
+```{r}
+x <- list(1:10)
+x[[2]] <- x
+```
+
+After the first line `x` is a list of length 1, containing the integers 1 to 10. The second line adds a second element, which is a copy of x. 
+
+```{r}
+ref(x)
+```
+
+## Object size
+
+### Exercises {-}
+
+**1.** 
+
+_In the following example, why are `object.size(y)` and `obj_size(y)` so radically different? Consult the documentation of `object.size()`._
+
+```{r}
+y <- rep(list(runif(1e4)), 100)
+
+object.size(y)
+#> 8005648 bytes
+obj_size(y)
+#> 80,896 B
+```
+
+From the man page: 
+
+> "This function merely provides a rough indication … but does not detect if elements of a list are shared "
+
+So `object.size()` is counting each repetition of `list(runif(1e4))` as a separate use of memory. `obj_size()` counts only the actual memory use where each element of `y` points at the same address. We can see this by checking the first few elements of 
+
+```{r}
+ref(y[1:3])
+```
+
+**2.** 
+
+_Take the following list. Why is its size somewhat misleading?_
+
+```{r}
+funs <- list(mean, sd, var)
+obj_size(funs)
+#> 17,608 B
+```
+
+`mean` refers to a method, rather than the function itself.
+
+```{r}
+mean
+```
+
+We can look at the methods for `mean()`: 
+
+```{r}
+methods("mean")
+```
+
+And check the size of the default method. 
+
+```{r}
+obj_size(mean.default)
+```
+
+Repeating this for the full list we can get a more accurate estimate of size. 
+
+```{r}
+funs <- list(mean.default, sd, var)
+obj_size(funs)
+```
+
+**3.**
+
+Predict the output of the following code:
+
+
+
+```{r}
+a <- runif(1e6)
+# Prediction is c. 8MB for a
+obj_size(a)
+
+
+b <- list(a, a)
+# Predict c. 8MB for b
+obj_size(b)
+# Predict c. 8MB as both point to the same underlying vector, a
+obj_size(a, b)
+
+b[[1]][[1]] <- 10
+# Now b will be larger as its first element has been copied. c. 16MB
+obj_size(b)
+# 16MB, this counts the shared vector and the copy created two lines above
+obj_size(a, b)
+
+b[[2]][[1]] <- 10
+# Still 16MB, as the list contains two vectors of the same length. Because the 
+# second element was modified directly rather than being created as a copy of 
+# b[[1]] it points to a different address, even though both b[[1]] and b[[2]] 
+# have the same value
+obj_size(b)
+# This will show 24MB, as we are counting three copies of numeric vectors of 
+# length 1e6
+obj_size(a, b)
+```
+
+## Modify in place
+
+Note: hard to predict when objects will be copied vs. modifying in place. Best to check with `tracemem()`. 
+
+### Exercises {-}
+
+**1.**
+
+_Explain why the following code doesn’t create a circular list._
+
+```{r}
+x <- list()
+x[[1]] <- x
+x
+```
+It's because the code on the right of the assignment operator is evaluated first, and then assigned to the first element of `x`. So `x` goes from being an empty list to being a list of length 1 whose first element contains an empty list. 
+
+**2.** 
+
+_Wrap the two methods for subtracting medians into two functions, then use the 'bench' package (Hester [2018](http://bench.r-lib.org/)) to carefully compare their speeds. How does performance change as the number of columns increase?_
+
+First load the library and write the functions: 
+
+```{r}
+library(bench)
+df_method <- function(x) {
+    medians <- vapply(x, median, numeric(1))
+    
+    for (i in seq_along(medians)) {
+        x[[i]] <- x[[i]] - medians[[i]]
+    }
+    
+    x
+}
+
+list_method <- function(x) {
+    medians <- vapply(x, median, numeric(1))
+    y <- as.list(x)
+    for (i in seq_along(medians)) {
+        y[[i]] <- y[[i]] - medians[[i]]
+    }
+    as.data.frame(y)
+}
+```
+
+```{r}
+df_tbl <- tibble(
+    num_cols = 2^(seq_len(10))
+) %>%
+    mutate(
+        dummy_df = map(
+            num_cols, 
+            ~ data.frame(matrix(runif(.x * 1e4), ncol = .x))
+        )
+    ) %>% 
+    crossing(
+        tibble(
+            rep = seq_len(
+                10
+            )
+        )
+    )
+```
+
+
+```{r}
+bench_results <- df_tbl %>% 
+    mutate(
+        time_df_method = map_dbl(
+            dummy_df, 
+            ~ bench_time(df_method(.x)) %>% 
+                pluck("real") %>% 
+                as.double()
+        ), 
+        time_list_method = map_dbl(
+            dummy_df, 
+            ~ bench_time(list_method(.x)) %>% 
+                pluck("real") %>% 
+                as.double()
+        )
+    )
+```
+
+
+```{r}
+bench_results %>% 
+    group_by(
+        num_cols
+    ) %>% 
+    summarise(
+        across(
+            contains("method"), 
+            mean
+        ), 
+        .groups = "drop"
+    ) %>% 
+    pivot_longer(
+        cols = c(
+            time_df_method, 
+            time_list_method
+        ), 
+        names_to = "method", 
+        values_to = "time"
+    ) %>% 
+    mutate(method = str_sub(method, 6L)) %>% 
+    ggplot(aes(num_cols, time, colour = method, fill = method)) + 
+    geom_point() + 
+    geom_line() + 
+    geom_smooth(method = "gam") + 
+    theme_light()
+```
+
+The results here are less smoooth than in the [solutions](https://advanced-r-solutions.rbind.io/names-and-values.html#modify-in-place), but basically the list method is scaling linearly and the data frame method by $O(n^2)$. To start with though the overhead of converting to a list outweighs the benefits of the list method. 
+
+
+**3.**
+
+_What happens if you attempt to use `tracemem()` on an environment?_
+
+```{r error=TRUE}
+e1 <- new.env()
+tracemem(e1)
+```
+
